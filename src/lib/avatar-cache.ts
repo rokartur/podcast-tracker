@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { avatarCandidates } from "@/lib/avatar";
 
 // Server-side avatar fetching + caching helpers. The browser hammering a single
@@ -46,17 +47,39 @@ async function tryFetch(url: string): Promise<FetchedAvatar | null> {
   }
 }
 
+// Avatar sources keyed off the guest's email: Gravatar (MD5 hash of the
+// lowercased address) and unavatar's email lookup (which also resolves Google
+// profile photos). Many guests have a contact email but no usable social
+// handle, so this is often the only real photo available. `d=404` forces
+// Gravatar to 404 on a miss so we fall through to initials instead of caching
+// its generic mystery-person icon.
+function emailCandidates(email: string | null): string[] {
+  const e = email?.trim().toLowerCase();
+  if (!e || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return [];
+  const hash = createHash("md5").update(e).digest("hex");
+  return [
+    `https://gravatar.com/avatar/${hash}?s=200&d=404`,
+    `https://unavatar.io/${encodeURIComponent(e)}`,
+  ];
+}
+
 /**
- * Fetch the best available avatar for a guest, trying the stored image URL then
- * each social-derived candidate in order. Returns null when none resolve to a
- * real image (caller should fall back to an initials avatar).
+ * Fetch the best available avatar for a guest, trying the stored image URL, then
+ * each social-derived candidate, then email-derived sources (Gravatar/Google),
+ * in order. Returns null when none resolve to a real image (caller should fall
+ * back to an initials avatar).
  */
 export async function fetchAvatar(
   image: string | null,
   links: string | null,
+  email: string | null = null,
 ): Promise<FetchedAvatar | null> {
   const candidates = [
-    ...new Set([image, ...avatarCandidates(links)].filter(Boolean) as string[]),
+    ...new Set(
+      [image, ...avatarCandidates(links), ...emailCandidates(email)].filter(
+        Boolean,
+      ) as string[],
+    ),
   ];
   for (const url of candidates) {
     const got = await tryFetch(url);

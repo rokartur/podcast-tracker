@@ -36,6 +36,65 @@ function stripFences(raw: string): string {
   return s.trim();
 }
 
+// Slice the outermost balanced JSON object/array out of a string, ignoring any
+// prose the model wrapped around it. Brace counting is string-aware so braces
+// inside JSON string values don't throw off the depth. Returns null when no
+// balanced block is found (e.g. the JSON was truncated mid-output).
+function extractJsonBlock(s: string): string | null {
+  const start = s.search(/[{[]/);
+  if (start < 0) return null;
+  const open = s[start];
+  const close = open === "{" ? "}" : "]";
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === open) depth++;
+    else if (c === close && --depth === 0) return s.slice(start, i + 1);
+  }
+  return null;
+}
+
+// Parse model output into JSON, tolerating fences and surrounding prose. On a
+// hard failure, log the raw payload server-side (never returned to the client)
+// so the actual model output is diagnosable. `truncated` flips the error to a
+// token-budget hint, since a cut-off response is unparseable for a different
+// reason than malformed output.
+function parseLlmJson<T>(raw: string, truncated: boolean): T {
+  const s = stripFences(raw);
+  try {
+    return JSON.parse(s) as T;
+  } catch {
+    const block = extractJsonBlock(s);
+    if (block) {
+      try {
+        return JSON.parse(block) as T;
+      } catch {
+        // fall through to the diagnostics below
+      }
+    }
+    console.error(
+      `AI provider returned unparseable JSON (truncated=${truncated}): ` +
+        JSON.stringify(raw.slice(0, 2000)),
+    );
+    if (truncated) {
+      throw new Error(
+        "The AI model ran out of tokens before completing its JSON answer. " +
+          "Reduce the requested guest count or raise maxTokens.",
+      );
+    }
+    throw new Error("AI provider returned invalid JSON");
+  }
+}
+
 export interface LlmJsonOpts {
   system: string;
   user: string;
@@ -76,7 +135,7 @@ export async function llmJson<T>(opts: LlmJsonOpts): Promise<T> {
     if (!block || block.type !== "text") {
       throw new Error("AI provider returned no text content");
     }
-    return JSON.parse(stripFences(block.text)) as T;
+    return parseLlmJson<T>(block.text, res.stop_reason === "max_tokens");
   }
 
   // openrouter
@@ -150,9 +209,5 @@ export async function llmJson<T>(opts: LlmJsonOpts): Promise<T> {
     }
     throw new Error("AI provider returned an empty response");
   }
-  try {
-    return JSON.parse(stripFences(content)) as T;
-  } catch {
-    throw new Error("AI provider returned invalid JSON");
-  }
+  return parseLlmJson<T>(content, choice?.finish_reason === "length");
 }

@@ -57,7 +57,16 @@ function extractHandle(url: string): { platform: string; handle: string } | null
 }
 
 // Preferred avatar source order: X/Twitter first, then YouTube, then the rest.
-const PLATFORM_ORDER = ["twitter", "youtube", "instagram", "github", "linkedin"];
+const PLATFORM_ORDER = ["twitter", "youtube", "github", "instagram", "linkedin"];
+
+// Per-platform avatar URL. GitHub serves profile pictures directly and reliably
+// (https://github.com/<user>.png) with no rate limit or placeholder, so prefer
+// that over unavatar.io; every other platform goes through unavatar.
+function platformAvatarUrl(platform: string, handle: string): string {
+  const h = encodeURIComponent(handle);
+  if (platform === "github") return `https://github.com/${h}.png?size=200`;
+  return `https://unavatar.io/${platform}/${h}`;
+}
 
 /**
  * Build an ordered list of candidate avatar URLs from a guest's social links —
@@ -85,9 +94,7 @@ export function avatarCandidates(links: string | null | undefined): string[] {
   for (const f of found) {
     if (seen.has(f.platform)) continue;
     seen.add(f.platform);
-    out.push(
-      `https://unavatar.io/${f.platform}/${encodeURIComponent(f.handle)}`,
-    );
+    out.push(platformAvatarUrl(f.platform, f.handle));
   }
   return out;
 }

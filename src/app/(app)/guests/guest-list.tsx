@@ -492,11 +492,32 @@ export function GuestList({ guests }: { guests: GuestCard[] }) {
     }
   }
 
-  // All distinct topics, for the topic dropdown.
+  // All distinct topics, for the topic dropdown. Collapse case variants
+  // ("Agentic workflows" vs "Agentic Workflows") into one option — selection and
+  // filtering already match case-insensitively, so showing both is just noise.
+  // Keep the casing seen most often across guests (ties: first alphabetically).
   const allTopics = useMemo(() => {
-    const set = new Set<string>();
-    for (const g of guests) for (const t of splitTopics(g.topics)) set.add(t);
-    return [...set].sort((a, b) => a.localeCompare(b));
+    const byKey = new Map<string, Map<string, number>>();
+    for (const g of guests) {
+      for (const t of splitTopics(g.topics)) {
+        const variants = byKey.get(t.toLowerCase()) ?? new Map<string, number>();
+        variants.set(t, (variants.get(t) ?? 0) + 1);
+        byKey.set(t.toLowerCase(), variants);
+      }
+    }
+    const canonical: string[] = [];
+    for (const variants of byKey.values()) {
+      let best = "";
+      let bestCount = -1;
+      for (const [variant, count] of variants) {
+        if (count > bestCount || (count === bestCount && variant.localeCompare(best) < 0)) {
+          best = variant;
+          bestCount = count;
+        }
+      }
+      canonical.push(best);
+    }
+    return canonical.sort((a, b) => a.localeCompare(b));
   }, [guests]);
 
   const columns = useMemo<ColumnDef<GuestCard>[]>(

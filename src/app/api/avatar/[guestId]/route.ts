@@ -45,6 +45,7 @@ export async function GET(
       name: guest.name,
       image: guest.image,
       links: guest.links,
+      email: guest.email,
       imageData: guest.imageData,
       imageType: guest.imageType,
       checkedAt: guest.imageCheckedAt,
@@ -73,7 +74,7 @@ export async function GET(
   }
 
   // 2. Fetch once and cache.
-  const fetched = await fetchAvatar(g.image, g.links);
+  const fetched = await fetchAvatar(g.image, g.links, g.email);
   if (fetched) {
     await db
       .update(guest)
