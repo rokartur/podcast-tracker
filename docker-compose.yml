@@ -1,3 +1,12 @@
+# Full stack: Postgres + one-shot schema push + the Next.js app.
+#
+#   cp .env.example .env   # then fill BETTER_AUTH_SECRET, AI key, CRON_SECRET...
+#   docker compose up --build
+#
+# The app is served on http://localhost:3000. DATABASE_URL is pinned below to the
+# bundled `db` service (it overrides whatever .env says), so the stack is
+# self-contained. To use an EXTERNAL Postgres instead, point DATABASE_URL at it
+# and drop the `db` service + its depends_on entries.
 services:
   db:
     image: postgres:17-alpine
@@ -17,5 +26,46 @@ services:
       timeout: 5s
       retries: 5
 
+  # Applies the Drizzle schema, then exits. The app waits for it to finish.
+  # Destructive schema changes need confirmation: run manually with a TTY ->
+  #   docker compose run --rm migrate npm run db:push -- --force
+  migrate:
+    build:
+      context: .
+      target: migrator
+    image: podcast-tracker-migrate
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql://podcast:podcast_dev_pw@db:5432/podcast_tracker
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      # target: runner (default final stage)
+    image: podcast-tracker
+    container_name: podcast_tracker_app
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql://podcast:podcast_dev_pw@db:5432/podcast_tracker
+      # DATABASE_SSL: "require"   # set if pointing at a TLS-only external DB
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      # Persist the downloaded Chromium binary + X login session across restarts.
+      - cloak_cache:/home/nextjs/.cloakbrowser
+      - cloak_profile:/home/nextjs/cloak-profile
+
 volumes:
   pgdata:
+  cloak_cache:
+  cloak_profile:

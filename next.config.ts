@@ -37,6 +37,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Emit a self-contained `.next/standalone` server (server.js + only the traced
+  // node_modules) so the Docker runtime image stays small and needs no install.
+  output: "standalone",
   // CloakBrowser drives a native Chromium binary via playwright-core; keep both
   // out of the Server Components bundle so they load through native require().
   serverExternalPackages: ["cloakbrowser", "playwright-core"],
