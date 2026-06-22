@@ -1,12 +1,15 @@
-# Full stack: Postgres + one-shot schema push + the Next.js app.
+# Full stack: Postgres + one-shot schema push + the lean Next.js app.
 #
 #   cp .env.example .env   # then fill BETTER_AUTH_SECRET, AI key, CRON_SECRET...
 #   docker compose up --build
 #
-# The app is served on http://localhost:3000. DATABASE_URL is pinned below to the
-# bundled `db` service (it overrides whatever .env says), so the stack is
-# self-contained. To use an EXTERNAL Postgres instead, point DATABASE_URL at it
-# and drop the `db` service + its depends_on entries.
+# Serves http://localhost:3000. DATABASE_URL is pinned below to the bundled `db`
+# service (overrides .env), so the stack is self-contained. For an EXTERNAL
+# Postgres: point DATABASE_URL at it and drop the `db` service + its depends_on.
+#
+# The default `app` is the lean Alpine image WITHOUT the Chromium reach scraper.
+# To enable "Refresh numbers" (X/YouTube counts), build the heavier variant and
+# persist its browser data — uncomment the marked lines under `app`.
 services:
   db:
     image: postgres:17-alpine
@@ -45,7 +48,7 @@ services:
   app:
     build:
       context: .
-      # target: runner (default final stage)
+      target: runner # <- swap to `runner-reach` to enable the Chromium scraper
     image: podcast-tracker
     container_name: podcast_tracker_app
     restart: unless-stopped
@@ -60,12 +63,12 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    volumes:
-      # Persist the downloaded Chromium binary + X login session across restarts.
-      - cloak_cache:/home/nextjs/.cloakbrowser
-      - cloak_profile:/home/nextjs/cloak-profile
+    # --- Reach scraper only (with target: runner-reach): persist Chromium + login
+    # volumes:
+    #   - cloak_cache:/home/nextjs/.cloakbrowser
+    #   - cloak_profile:/home/nextjs/cloak-profile
 
 volumes:
   pgdata:
-  cloak_cache:
-  cloak_profile:
+  # cloak_cache:     # uncomment with the reach scraper volumes above
+  # cloak_profile:
