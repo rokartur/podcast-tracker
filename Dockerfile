@@ -40,17 +40,18 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
 RUN apk add --no-cache libc6-compat
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# Some route modules import the DB client at module load (e.g. /api/cron/scrape),
-# whose constructor throws if these are unset — so they must EXIST during build.
-# The values are placeholders: postgres-js connects lazily (no DB hit at build)
-# and this stage is never shipped, so nothing leaks into the final image.
-ENV DATABASE_URL="postgresql://build:build@127.0.0.1:5432/build" \
-    BETTER_AUTH_SECRET="build-time-placeholder-not-used-at-runtime"
 # Only NEXT_PUBLIC_* are inlined at build time; the one this app reads is
 # optional (cross-origin auth only). Everything real is read at RUNTIME.
 ARG NEXT_PUBLIC_BETTER_AUTH_URL
-ENV NEXT_PUBLIC_BETTER_AUTH_URL=${NEXT_PUBLIC_BETTER_AUTH_URL}
-RUN npm run build
+# Some route modules import the DB/auth clients at module load (e.g.
+# /api/cron/scrape), whose constructors throw if these are unset — so they must
+# EXIST during build. They are throwaway placeholders set ONLY for this RUN (not
+# persisted as image ENV): postgres-js connects lazily so the DB is never hit,
+# and the builder stage is never shipped. Real values come from runtime env.
+RUN DATABASE_URL="postgresql://build:build@127.0.0.1:5432/build" \
+    BETTER_AUTH_SECRET="build-time-placeholder-not-used-at-runtime" \
+    NEXT_PUBLIC_BETTER_AUTH_URL="${NEXT_PUBLIC_BETTER_AUTH_URL}" \
+    npm run build
 
 # ----------------------------------------------------------------------------
 # migrator — applies the Drizzle schema to Postgres (`npm run db:push`).
