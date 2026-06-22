@@ -20,10 +20,15 @@ const ssl =
     ? ("require" as const)
     : undefined;
 
+// Serverless (Vercel) spins up many short-lived instances; a high per-instance
+// pool would exhaust Postgres connections fast. Cap to 1 connection per instance
+// there; keep a real pool on long-lived servers (VPS/Docker).
+const max = process.env.VERCEL ? 1 : 10;
+
 const client =
   globalForDb.pgClient ??
   postgres(connectionString, {
-    max: 10,
+    max,
     idle_timeout: 20,
     connect_timeout: 10,
     ssl,

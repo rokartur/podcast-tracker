@@ -9,8 +9,9 @@ import { type ScrapePeriod } from "@/lib/channel-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// Allow a long-lived SSE connection.
-export const maxDuration = 800;
+// Allow a long-lived SSE connection. Self-hosted ignores this; Vercel caps it at
+// the plan max (300).
+export const maxDuration = 300;
 
 async function resolveTeamId(): Promise<string | null> {
   const sess = await auth.api.getSession({ headers: await headers() });

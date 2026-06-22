@@ -1,0 +1,13 @@
+# Keep secrets and self-host artifacts out of the Vercel upload/build.
+.env
+.env.*
+!.env.example
+
+.cloak-profile
+
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+*.tsbuildinfo
+.DS_Store

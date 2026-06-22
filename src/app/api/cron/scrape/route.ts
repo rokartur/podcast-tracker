@@ -5,8 +5,9 @@ import { runDueScans } from "@/lib/cron/run-due-scans";
 export const runtime = "nodejs";
 // Never cache — this must run fresh every invocation.
 export const dynamic = "force-dynamic";
-// A full back-catalogue scan can take minutes; don't let the platform abort it.
-export const maxDuration = 800;
+// A full back-catalogue scan can take minutes. Self-hosted (VPS/Docker) ignores
+// this; on Vercel it's capped at the plan max (300 = Pro/Hobby ceiling).
+export const maxDuration = 300;
 
 /**
  * Daily scan cron endpoint.
